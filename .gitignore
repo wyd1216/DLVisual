@@ -16,6 +16,7 @@
 
 *.log
 *.bak
+*.pyc
 __pycache__/
 .ipynb_checkpoints/
 .cache
@@ -29,6 +30,7 @@ __pycache__/
 # Environments
 .env
 .venv
+.idea
 env/
 venv/
 ENV/
