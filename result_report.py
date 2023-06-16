@@ -21,19 +21,38 @@ def single_file_evaluation(path, args, sub_title=None):
     # Produce base information
     print(path)
     estimator = ModelResultsEvaluation(path)
-    estimator.threshold_correction(method='youden')
+    estimator.threshold_reset(method=args.cut_off_method, datasets=['test', 'external'])
 
-    # Get evaluation metrics table
+    # Generate evaluation metrics table
     dis_df = estimator.get_distribution()
     eval_df = estimator.evaluation_table()
     print(eval_df)
 
+    # Generate the table that all the labels, predict_probabilities, prediction ...
     all_data = estimator._all_data
     if 'pid' in all_data.columns:
         sorted_indices = index_natsorted(all_data['pid'])
         all_data = all_data.iloc[sorted_indices]
 
+    threshold = estimator.threshold
+    datasets = estimator.dataset
     # Produce figure
+
+    # Generate confusion matrix for dataset
+    if args.report_confusion_matrix:
+        for dataset in datasets:
+            estimator.plot_confusion_matrix(dataset=dataset,
+                                            savefig=Path(args.report_saved_dir) / (dataset + '_CM.png'), fig_title='')
+
+    # Generate ROC_AUC curves
+    if args.report_roc_auc:
+        estimator.plot_roc_auc(dataset=datasets,
+                               savefig=Path(args.report_saved_dir) / ('roc_auc.png'))
+
+    # Generate DCA
+    if args.report_dca:
+        for dataset in datasets:
+            estimator.plot_dca(dataset=dataset, savefig=Path(args.report_saved_dir) / (dataset+'_dca.png'))
 
     # ----------------------pdf report_saved----------------------------
     # 创建内容对应的空列表
@@ -47,30 +66,54 @@ def single_file_evaluation(path, args, sub_title=None):
     content.append(Graphs.draw_text('The data file path:', color='green'))
     # content.append(Graphs.draw_text(args.result_path))
 
-    # Image base info table
+    # Add image base info table
     content.append(Graphs.draw_little_title('Dataset distribution'))
     dis_df = dis_df.astype('str')
     dis_table = tuple([dis_df.columns.to_list()] + dis_df.values.tolist())
     content.append(Graphs.draw_table(*dis_table, col_width=80))
 
-    # evaluation table
+    # Add evaluation table
     content.append(Graphs.draw_little_title('Evaluation metrics for the results'))
     eval_df = eval_df.round(4)
     eval_df = eval_df.astype('str')
     eval_table = tuple([eval_df.columns.to_list()] + eval_df.values.tolist())
     content.append(Graphs.draw_table(*eval_table, col_width=70))
 
-    # prediction and labels
+    # Add confusion matrix
+    if args.report_confusion_matrix:
+        content.append(Spacer(1, 20))
+        for dataset in datasets:
+            content.append(Graphs.draw_text(f'Confusion Matrix for {dataset} dataset:', color='black'))
+            content.extend(Graphs.draw_img(str(Path(args.report_saved_dir) / (dataset + '_CM.png')), width=10))
+            # add space
+            content.append(Spacer(2, 20))
+
+    # Add ROC_AUC curves
+    if args.report_roc_auc:
+        content.append(Spacer(1, 20))
+        content.append(Graphs.draw_text(f'Roc Auc curves:', color='black'))
+        content.extend(Graphs.draw_img(str(Path(args.report_saved_dir) / ('roc_auc.png')), width=10))
+        # add space
+        content.append(Spacer(2, 20))
+
+    # Add DCA
+    if args.report_dca:
+        content.append(Spacer(1, 20))
+        for dataset in datasets:
+            content.append(Graphs.draw_text(f'DCA curve for {dataset} dataset:', color='black'))
+            content.extend(Graphs.draw_img(str(Path(args.report_saved_dir) / (dataset + '_dca.png')), width=10))
+            # add space
+            content.append(Spacer(2, 20))
+
+    # Add table of labels
     content.append(PageBreak())
     content.append(Graphs.draw_little_title('The probability, prediction and label of the dataset'))
+    content.append(
+        Graphs.draw_text(f'The optimal cut-off value in this results is : {round(threshold, 5)}', color='green'))
     all_data = all_data.round(4)
     all_data = all_data.astype('str')
     data_table = tuple([all_data.columns.to_list()] + all_data.values.tolist())
     content.append(Graphs.draw_table(*data_table, col_width=80))
-    # 添加图片
-    # content.append(Spacer(1, 20))
-    # content.append(Graphs.draw_text('Single image in middle one:', color='green'))
-    # content.extend(Graphs.draw_img(str(saved_dir / 'single_img.png'), width=8))
 
     # 添加图片
     # content.append(Spacer(1, 20))
@@ -119,7 +162,8 @@ def main(args):
     doc.build(content)
 
     # Delete the template files in the process
-    shutil.rmtree('./tmp')
+    if not args.report_keep_tmp:
+        shutil.rmtree('./tmp')
 
 
 if __name__ == '__main__':
